@@ -4,6 +4,7 @@
   "description": "OpenClaw Multi-Agent Work Visualization Dashboard",
   "type": "module",
   "openclaw": {
+    "extensions": [],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2",
       "minGatewayVersion": "2026.5.7"
