@@ -1,0 +1,22 @@
+{
+  "id": "openclaw-viz",
+  "name": "OpenClaw Viz",
+  "description": "Enhanced Control UI with agent topology graph, intervention console, session replay, RBAC, SSO, Prometheus/Grafana, and multi-cluster monitoring",
+  "version": "1.0.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "port": {
+        "type": "integer",
+        "default": 3000,
+        "description": "Viz server port"
+      },
+      "openclawHome": {
+        "type": "string",
+        "default": "",
+        "description": "Override OpenClaw home directory (defaults to ~/.openclaw)"
+      }
+    }
+  }
+}
