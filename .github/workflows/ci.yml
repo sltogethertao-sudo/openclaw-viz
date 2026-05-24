@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check for suspicious patterns
+        run: |
+          echo "=== Checking for potential secrets ==="
+          ! grep -rn -E "(sk-[a-zA-Z0-9]{20,}|api[-_]?key['\"]?\s*[:=]\s*['\"][a-zA-Z0-9])" \
+            --include="*.js" --include="*.jsx" --include="*.json" \
+            . 2>/dev/null | grep -v node_modules | grep -v "\.spec\." && \
+          echo "✅ No secrets detected"
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Build client
+        run: npm run build
+
+      - name: Verify server syntax
+        run: node --check server/index.js
