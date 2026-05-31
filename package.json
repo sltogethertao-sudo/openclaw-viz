@@ -8,7 +8,6 @@
       "./server/index.js"
     ],
     "compat": {
-      "pluginApi": "^1.0.0",
       "minGatewayVersion": "2026.5.7"
     },
     "build": {
