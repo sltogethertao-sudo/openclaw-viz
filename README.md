@@ -58,6 +58,15 @@
 - API rate limiting (per-role) · Session-level audit export (JSON/CSV/JSONL)
 - Intervention policy engine with 5 built-in rules
 
+### ⚙️ Processing Pipeline (LogicFolding Q1)
+- **9-step logic chain**: S₁→S₂→HBE→S₃→Fusion→Engine→Trace→Analyzer→Efficiency
+- **Real-time execution stream**: per-step live log driven by `.md` file writes from the engine
+- **State machine**: file-existence-based progress detection (no hardcoded timers)
+- **Dual-channel updates**: WebSocket push + 5s polling fallback
+- **Step metrics on cards**: confidence %, facts checked, verdict preserved across transitions
+- **Stream filtering**: only current step's entries shown in execution panel
+- **Multi-problem mode** (design complete): sub-problem badge bar, collapsible SubProblemCards, CrossFusion with 4 output files
+
 ---
 
 ## Prerequisites
