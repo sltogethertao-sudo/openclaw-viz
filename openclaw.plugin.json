@@ -18,5 +18,6 @@
         "description": "Override OpenClaw home directory (defaults to ~/.openclaw)"
       }
     }
-  }
+  },
+  "pluginApi": ">=2026.5.7"
 }
