@@ -21,6 +21,7 @@ import AuditLogPanel from './components/AuditLogPanel'
 import ClusterPanel from './components/ClusterPanel'
 import PrometheusPanel from './components/PrometheusPanel'
 import SSOPanel from './components/SSOPanel'
+import ProcessingPanel from './components/ProcessingPanel'
 import StatusBar from './components/StatusBar'
 
 export default function App() {
@@ -49,6 +50,7 @@ export default function App() {
           { id: 'project', label: 'Project View', icon: '📁' },
           { id: 'timeline', label: 'Timeline', icon: '📅' },
           { id: 'tasks', label: 'Task Flow', icon: '⚙️' },
+          { id: 'processing', label: 'Processing', icon: '⚙️' },
           { id: 'alerts', label: 'Alerts', icon: '🔔' },
           { id: 'users', label: 'Users', icon: '👥' },
           { id: 'policies', label: 'Policies', icon: '🛡️' },
@@ -65,8 +67,8 @@ export default function App() {
             onClick={() => setActiveView(view.id)}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
               activeView === view.id
-                ? 'bg-accent-600/20 text-accent-400 border border-accent-500/30'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                ? 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
             }`}
           >
             <span className="mr-1">{view.icon}</span>{view.label}
@@ -123,6 +125,9 @@ export default function App() {
           )}
           {activeView === 'prometheus' && (
             <div className="flex-1 overflow-auto p-4"><PrometheusPanel /></div>
+          )}
+          {activeView === 'processing' && (
+            <div className="flex-1 overflow-auto"><ProcessingPanel /></div>
           )}
           {activeView === 'sso' && (
             <div className="flex-1 overflow-auto p-4"><SSOPanel /></div>

@@ -42,7 +42,7 @@ export const useStore = create((set, get) => ({
   selectedNode: null,
   selectedSession: null,
   activePanel: 'sessions', // 'sessions' | 'intervention' | 'logs' | 'cron' | 'metrics'
-  activeView: 'agent', // 'agent' | 'project' | 'timeline' | 'tasks' | 'alerts'
+  activeView: 'processing', // 'agent' | 'project' | 'timeline' | 'tasks' | 'alerts' | 'processing'
   wsConnected: false,
   isLoading: true,
   error: null,
