@@ -1207,6 +1207,252 @@ app.get('/api/projects', (req, res) => {
   res.json(getProjectStructure());
 });
 
+// ─── Processing (LogicFolding) 实时状态 ────────────────────────────
+
+const PROCESSING_DIR = join(WORKSPACE, 'Projects/多层感知思考模式/src/thinking_logs');
+
+// ─── 单管道状态检测 ──────────────────────────────────────────
+
+function getPipelineState(pipelineLayerDir) {
+  const result = { steps: [], stream: [], throughVerdict: null, compressionRatio: 0, latency: 0 };
+  if (!pipelineLayerDir || !existsSync(pipelineLayerDir)) return result;
+
+  const files = new Set(readdirSync(pipelineLayerDir));
+  const hasCtx = files.has('context.md'), hasS1 = files.has('s1_intuition.md'), hasS2 = files.has('s2_rationality.md');
+  const hasHbe = files.has('hbe_audit.md'), hasS3 = files.has('s3_reflection.md'), hasSyn = files.has('synthesis.md');
+  const hasEff = files.has('efficiency.md'), hasTrace = files.has('trace.json');
+
+  let sp = { s1:'pending', s2:'pending', hbe:'pending', s3:'pending', syn:'pending', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+  if (hasTrace) sp = { s1:'done', s2:'done', hbe:'done', s3:'done', syn:'done', eng:'done', trace:'done', ana:'done', eff:'done' };
+  else if (hasEff) sp = { s1:'done', s2:'done', hbe:'done', s3:'done', syn:'done', eng:'done', trace:'done', ana:'current', eff:'current' };
+  else if (hasSyn) sp = { s1:'done', s2:'done', hbe:'done', s3:'done', syn:'done', eng:'done', trace:'current', ana:'pending', eff:'pending' };
+  else if (hasS3) sp = { s1:'done', s2:'done', hbe:'done', s3:'done', syn:'current', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+  else if (hasHbe) sp = { s1:'done', s2:'done', hbe:'done', s3:'current', syn:'pending', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+  else if (hasS2) sp = { s1:'done', s2:'done', hbe:'current', s3:'pending', syn:'pending', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+  else if (hasS1) sp = { s1:'done', s2:'current', hbe:'pending', s3:'pending', syn:'pending', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+  else if (hasCtx) sp = { s1:'current', s2:'pending', hbe:'pending', s3:'pending', syn:'pending', eng:'pending', trace:'pending', ana:'pending', eff:'pending' };
+
+  let query = '', model = 'deepseek/deepseek-v4-pro', timestamp = null;
+  if (hasTrace) { const t = readJSON(join(pipelineLayerDir, 'trace.json')); if (t) { query = t.query||''; model = t.model||model; timestamp = t.timestamp; } }
+  else if (hasCtx) {
+    const c = readFileSync(join(pipelineLayerDir, 'context.md'), 'utf8');
+    const qm = c.match(/##\s*查询[：:]*\s*\n([\s\S]+?)\n##\s/); if (qm) query = qm[1].trim();
+    const mm = c.match(/模型[：:]?\s*(.+)/); if (mm) model = mm[1].trim();
+    const tsm = c.match(/^#.*?—\s*(.+)/); if (tsm) timestamp = tsm[1].trim();
+  }
+
+  const trace = hasTrace ? readJSON(join(pipelineLayerDir, 'trace.json')) : null;
+  const layers = trace?.layers || {};
+  if (trace?.query) query = trace.query; if (trace?.model) model = trace.model; if (trace?.timestamp) timestamp = trace.timestamp;
+  const eff = trace?.efficiency || {}; result.compressionRatio = eff.compression_ratio || 0; result.latency = eff.total_latency || 0;
+
+  const pm = (n, p) => { const fp = join(pipelineLayerDir, n); if (!existsSync(fp)) return null; try { const c = readFileSync(fp, 'utf8'), m = c.match(p); return m ? m[1].trim() : null; } catch { return null; } };
+  const s1c = parseFloat(pm('s1_intuition.md', /置信度[：：]?\s*([\d.]+)/)) || 0;
+  const s1m = layers.s1 ? { confidence: layers.s1.confidence ? (layers.s1.confidence*100).toFixed(0)+'%' : '—', latency: layers.s1.latency_ms ? (layers.s1.latency_ms/1000).toFixed(1)+'s' : '—', tokens: String(layers.s1.tokens_out||'—') } : { confidence: s1c ? (s1c*100).toFixed(0)+'%' : '—', latency: '—', tokens: '—' };
+  let s2fc = layers.s2?.facts_checked || 0;
+  if (!s2fc) { try { const sc = readFileSync(join(pipelineLayerDir,'s2_rationality.md'), 'utf8'); s2fc = (sc.match(/- ✓/g)||[]).length; } catch {} }
+  const s2m = layers.s2 ? { confidence: layers.s2.facts_confirmed!==undefined ? String(layers.s2.facts_confirmed)+'/'+String(layers.s2.facts_checked||0)+'✓' : '—', latency: layers.s2.latency_ms ? (layers.s2.latency_ms/1000).toFixed(1)+'s' : '—', tokens: String(layers.s2.tokens_out||'—') } : { confidence: s2fc>0 ? String(s2fc)+'✓' : '—', latency: '—', tokens: '—' };
+  const s3md = pm('s3_reflection.md', /判定[：：]?\s*(\S+)/) || '';
+  const s3m = layers.s3 ? { confidence: layers.s3.verdict||'—', latency: layers.s3.latency_ms ? (layers.s3.latency_ms/1000).toFixed(1)+'s' : '—', tokens: String(layers.s3.tokens_out||'—') } : { confidence: s3md||'—', latency: '—', tokens: '—' };
+  const fusm = layers.fusion ? { confidence: result.compressionRatio>0 ? result.compressionRatio.toFixed(1)+'x' : '—', latency: layers.fusion.latency_ms ? (layers.fusion.latency_ms/1000).toFixed(1)+'s' : '—', tokens: String(layers.fusion.tokens_out||'—') } : { confidence: '—', latency: '—', tokens: '—' };
+
+  result.steps = [
+    { id:'s1', phase:sp.s1, title:'S₁ 直觉层', desc:'System 1 — 快思考', tag:'直觉', metrics:s1m },
+    { id:'s2', phase:sp.s2, title:'S₂ 理性层', desc:'System 2 — 慢思考', tag:'理性', metrics:s2m },
+    { id:'hbe', phase:sp.hbe, title:'HBE 审计', desc:'硬熔断边界审计', tag:'审计', metrics:{ confidence:'—', latency:'—', tokens:'—' } },
+    { id:'s3', phase:sp.s3, title:'S₃ 反思层', desc:'System 3 — 元认知', tag:'元认知', metrics:s3m },
+    { id:'syn', phase:sp.syn, title:'Folded Synthesis', desc:'三层融合输出', tag:'融合', metrics:fusm },
+    { id:'eng', phase:sp.eng, title:'VerticalStackingEngine', desc:'引擎协调器', tag:'引擎', metrics:{ confidence:'—', latency:'—', tokens:'—' } },
+    { id:'trace', phase:sp.trace, title:'TracingLayer', desc:'思考追踪层', tag:'追踪', metrics:{ confidence:'—', latency:'—', tokens:'—' } },
+    { id:'ana', phase:sp.ana, title:'TraceAnalyzer', desc:'批量分析工具', tag:'分析', metrics:{ confidence:'—', latency:'—', tokens:'—' } },
+    { id:'eff', phase:sp.eff, title:'效率计算', desc:'折叠效率 τ′/τ', tag:'指标', metrics:{ confidence:'—', latency:'—', tokens:'—' } },
+  ];
+
+  const st = timestamp ? new Date(timestamp) : new Date();
+  const ft = (d) => d.toLocaleTimeString('zh-CN', {hour12:false});
+  result.stream.push({ time:ft(st), msg:`启动推理: ${query.substring(0,40)}`, status:'ok' });
+  const sm = {}; result.steps.forEach(s => { sm[s.id] = s; });
+
+  const s1conf = layers.s1?.confidence || parseFloat(pm('s1_intuition.md', /置信度[：：]?\s*([\d.]+)/));
+  if (s1conf) result.stream.push({ time:ft(new Date(st.getTime()+(layers.s1?.latency_ms||1000))), msg:`S₁ 直觉: ${(s1conf*100).toFixed(0)}% 置信`, status:'ok' });
+  else if (sm.s1?.phase==='current') result.stream.push({ time:ft(new Date(st.getTime()+1000)), msg:'S₁ 直觉: 执行中', status:'run' });
+
+  if (s2fc>0) result.stream.push({ time:ft(new Date(st.getTime()+(layers.s2?.latency_ms||2000))), msg:`S₂ 理性: ${s2fc} 事实核对`, status:'ok' });
+  else if (sm.s2?.phase==='current') result.stream.push({ time:ft(new Date(st.getTime()+2000)), msg:'S₂ 理性: 执行中', status:'run' });
+
+  if (existsSync(join(pipelineLayerDir, 'hbe_audit.md'))) {
+    const hv = layers.hbe?.verdict || pm('hbe_audit.md', /判决[：：]?\s*(\S+)/) || 'AUDIT_PASSED';
+    result.stream.push({ time:ft(new Date(st.getTime()+(layers.hbe?.latency_ms||3000))), msg:`HBE 审计: ${hv} (${((layers.hbe?.confidence||0.95)*100).toFixed(0)}%)`, status:'ok' });
+  }
+
+  const s3v = (layers.s3?.verdict && layers.s3?.verdict!=='?') ? layers.s3?.verdict : pm('s3_reflection.md', /判定[：：]?\s*(\S+)/);
+  let s3b = layers.s3?.bias_detected; if (s3b===undefined) { try { const sc = readFileSync(join(pipelineLayerDir,'s3_reflection.md'),'utf8'); s3b = sc.includes('确认偏差: 有'); } catch {} }
+  if (s3v) result.stream.push({ time:ft(new Date(st.getTime()+(layers.s3?.latency_ms||3000))), msg:`S₃ 反思: ${s3v}, 偏差${s3b?'':'未'}检测`, status:sm.s3?.phase==='done'?'ok':'run' });
+  else if (sm.s3?.phase==='current') result.stream.push({ time:ft(new Date(st.getTime()+3000)), msg:'S₃ 反思: 执行中', status:'run' });
+
+  if (layers?.fusion?.tokens_out) result.stream.push({ time:ft(new Date(st.getTime()+(layers.fusion?.latency_ms||1000))), msg:`Fusion 完成: 压缩比 ${result.compressionRatio.toFixed(1)}x, 总耗时 ${result.latency.toFixed(0)}s`, status:'ok' });
+  else if (sm.syn?.phase==='current') result.stream.push({ time:ft(new Date(st.getTime()+1000)), msg:'Fusion: 融合中', status:'run' });
+
+  // 贯穿回溯
+  const ppd = join(pipelineLayerDir, '..', '..');
+  const rvp = join(ppd, 'through_review.md');
+  if (existsSync(rvp)) { try { const rc = readFileSync(rvp,'utf8'); const vm=rc.match(/\*\*verdict\*\*:\s*(\S+)/); if(vm) result.throughVerdict=vm[1]; } catch {} }
+  if (result.throughVerdict) result.stream.push({ time:ft(new Date()), msg:`贯穿回溯: ${result.throughVerdict}`, status:result.throughVerdict==='FAIL'?'err':'ok' });
+
+  return result;
+}
+
+// ─── CrossFusion 状态检测 ─────────────────────────────────────
+
+function getCrossFusionState(sessionDir) {
+  const cfDir = join(sessionDir, 'cross_fusion');
+  const coreFiles = ['cross_analysis.md', 'contradictions.md', 'final_answer.md'];
+  const optionalFiles = ['let_fly.md'];
+  if (!existsSync(cfDir)) return { status: 'pending', files: [] };
+  const chk = (f) => existsSync(join(cfDir, f)) ? 'completed' : 'pending';
+  const core = coreFiles.map(f => ({ name: f, status: chk(f) }));
+  const opt = optionalFiles.map(f => ({ name: f, status: chk(f) }));
+  const hasFinal = existsSync(join(cfDir, 'final_answer.md'));
+  let preview = null;
+  if (hasFinal) { try { preview = readFileSync(join(cfDir, 'final_answer.md'), 'utf8').substring(0, 300); } catch {} }
+  return { status: hasFinal ? 'completed' : (core.some(f => f.status === 'completed') ? 'running' : 'pending'), files: [...core, ...opt], finalAnswerPreview: preview };
+}
+
+// ─── 主处理入口 ───────────────────────────────────────────────
+
+function getLatestProcessingState() {
+  try {
+    if (!existsSync(PROCESSING_DIR)) return { status: 'idle', isMulti: false, steps: [], stream: [] };
+
+    const dates = readdirSync(PROCESSING_DIR).filter(d => d.match(/^\d{4}-\d{2}-\d{2}$/)).sort().reverse();
+    if (!dates.length) return { status: 'idle', isMulti: false, steps: [], stream: [] };
+    const dateDir = join(PROCESSING_DIR, dates[0]);
+    const sessions = readdirSync(dateDir).filter(d => /^\d{6}_[a-f0-9]+$/.test(d)).sort().reverse();
+    if (!sessions.length) return { status: 'idle', isMulti: false, steps: [], stream: [] };
+    const sessionDir = join(dateDir, sessions[0]);
+
+    const masterTrace = readJSON(join(sessionDir, 'master_trace.json'));
+    const subCount = masterTrace?.sub_problem_count || 0;
+    const isMulti = subCount > 1;
+
+    const pipelinesDir = join(sessionDir, 'pipelines');
+    const pipeInfos = [];
+    if (existsSync(pipelinesDir)) {
+      readdirSync(pipelinesDir).filter(d => d.startsWith('q')).sort().forEach(pid => {
+        const pd = join(pipelinesDir, pid);
+        const dd = readdirSync(pd).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+        if (dd.length) {
+          const ss = readdirSync(join(pd, dd[0])).filter(d => /^\d{6}_[a-f0-9]+$/.test(d) || /^[a-f0-9]{6,}$/.test(d)).sort().reverse();
+          if (ss.length) pipeInfos.push({ pipeId: pid, layerDir: join(pd, dd[0], ss[0]) });
+        }
+      });
+    }
+    if (!pipeInfos.length) return { status: 'idle', isMulti: false, steps: [], stream: [] };
+
+    // 子问题标题
+    let mainQuery = '', stMap = {};
+    try {
+      const dpPath = join(sessionDir, 'dispatcher', 'dispatch_plan.md');
+      if (existsSync(dpPath)) {
+        const dpc = readFileSync(dpPath, 'utf8');
+        const re = /\|\s*(q\d+)\s*\|\s*([^|]+?)\s*\|/g; let m;
+        while ((m = re.exec(dpc)) !== null) stMap[m[1]] = m[2].trim();
+        const fst = dpc.split('\n').find(l => l.trim() && !l.startsWith('|') && !l.startsWith('-'));
+        if (fst) mainQuery = fst.trim().replace(/^#+\s*/, '');
+      }
+    } catch {}
+
+    if (isMulti) {
+      const subProblems = pipeInfos.map(({ pipeId, layerDir }) => {
+        const state = getPipelineState(layerDir);
+        const allDone = state.steps.every(s => s.phase === 'done');
+        const anyRunning = state.steps.some(s => s.phase !== 'pending');
+        return {
+          id: pipeId, title: stMap[pipeId] || `子问题 ${pipeId}`,
+          status: allDone ? 'completed' : anyRunning ? 'running' : 'pending',
+          steps: state.steps, stream: state.stream,
+          throughVerdict: state.throughVerdict,
+          compressionRatio: state.compressionRatio, latency: state.latency,
+        };
+      });
+      const xf = getCrossFusionState(sessionDir);
+      const doneSteps = subProblems.reduce((s, sp) => s + sp.steps.filter(x => x.phase === 'done').length, 0);
+      const cfDone = xf.files.filter(f => f.status === 'completed').length;
+      return {
+        status: xf.status === 'completed' ? 'completed' : 'running', isMulti: true,
+        mainQuery: (masterTrace?.query_preview || mainQuery).substring(0, 80),
+        subProblemCount: subCount,
+        totalProgress: { done: doneSteps + cfDone, total: subProblems.length * 9 + 4 },
+        subProblems, crossFusion: xf,
+        session: { id: sessions[0], date: dates[0], dir: sessionDir },
+      };
+    }
+
+    // 单问题后退
+    const first = pipeInfos[0];
+    const state = getPipelineState(first.layerDir);
+    const allDone = state.steps.every(s => s.phase === 'done');
+    return {
+      status: allDone ? 'completed' : 'running', isMulti: false,
+      currentStep: state.steps.find(s => s.phase === 'current')?.id || null,
+      steps: state.steps, stream: state.stream,
+      session: {
+        id: sessions[0], date: dates[0], dir: sessionDir,
+        query: (masterTrace?.query_preview || '').substring(0, 80),
+        model: masterTrace?.model || 'unknown',
+        compressionRatio: state.compressionRatio, totalLatency: state.latency,
+        backtracks: 0, hbeBacktracks: 0,
+      },
+    };
+  } catch (e) {
+    console.error('Processing status error:', e.message);
+    return { status: 'error', isMulti: false, steps: [], stream: [] };
+  }
+}
+
+
+app.get('/api/processing/status', (req, res) => {
+  res.json(getLatestProcessingState());
+});
+
+// Watch thinking_logs for changes
+const PROCESSING_WATCH = PROCESSING_DIR;
+if (existsSync(PROCESSING_WATCH)) {
+  try {
+    const processingWatcher = watch(PROCESSING_WATCH, {
+      persistent: true,
+      depth: 5,
+      awaitWriteFinish: { stabilityThreshold: 500 },
+    });
+
+    // 监听所有 .md 层文件和 trace.json 的变化
+    // .md 文件写入更快，可以更早检测到步骤进度
+    processingWatcher.on('change', (path) => {
+      if (path.endsWith('.json') || path.endsWith('.md')) {
+        const fname = path.split('/').pop();
+        const isLayer = ['context.md','s1_intuition.md','s2_rationality.md','hbe_audit.md','s3_reflection.md','synthesis.md','efficiency.md','trace.json','master_trace.json'].includes(fname);
+        if (isLayer || fname.startsWith('trace')) {
+          console.log('Processing layer changed:', fname);
+          broadcast('processing:update', getLatestProcessingState());
+        }
+      }
+    });
+
+    processingWatcher.on('add', (path) => {
+      if (path.endsWith('.json') || path.endsWith('.md')) {
+        const fname = path.split('/').pop();
+        const isLayer = ['context.md','s1_intuition.md','s2_rationality.md','hbe_audit.md','s3_reflection.md','synthesis.md','efficiency.md','trace.json','master_trace.json'].includes(fname);
+        if (isLayer || fname.startsWith('trace')) {
+          console.log('New processing layer:', fname);
+          broadcast('processing:update', getLatestProcessingState());
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Processing watcher error:', e.message);
+  }
+}
+
 app.get('/api/timeline', (req, res) => {
   res.json(getProjectTimeline());
 });

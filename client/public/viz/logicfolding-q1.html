@@ -1,0 +1,689 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LogicFolding Q1 · 看板</title>
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #161618;
+    --surface2: #1e1e22;
+    --border: #2a2a30;
+    --border-light: #363640;
+    --text: #e4e4e7;
+    --text-muted: #888890;
+    --text-dim: #555560;
+    --accent: #60a5fa;
+    --accent-dim: #1e3a5f;
+    --accent-glow: rgba(96, 165, 250, 0.25);
+    --green: #4ade80;
+    --green-dim: #14532d;
+    --yellow: #fbbf24;
+    --yellow-dim: #422006;
+    --red: #f87171;
+    --orange: #fb923c;
+    --purple: #c084fc;
+    --cyan: #22d3ee;
+    --step-done: #4ade80;
+    --step-current: #60a5fa;
+    --step-pending: #363640;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Segoe UI", Roboto, sans-serif;
+    padding: 16px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .project-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+
+  .project-info h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  .project-info .subtitle {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  .phase-tag {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .phase-tag .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  /* Stats Row */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .stat-card .label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .stat-card .value {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .stat-card .value.active { color: var(--accent); }
+  .stat-card .value.done  { color: var(--green); }
+  .stat-card .value.pending { color: var(--text-dim); }
+
+  /* Progress Bar */
+  .progress-section {
+    margin-bottom: 20px;
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .progress-track {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--cyan));
+    transition: width 0.8s ease;
+    width: 0%;
+  }
+
+  /* Kanban Board */
+  .board {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+
+  .column {
+    flex: 1;
+    min-width: 200px;
+    max-width: 280px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .column-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .column-count {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    padding: 1px 7px;
+    border-radius: 10px;
+  }
+
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    cursor: default;
+    transition: all 0.2s;
+  }
+
+  .card:hover {
+    border-color: var(--border-light);
+    transform: translateY(-1px);
+  }
+
+  .card.current {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, var(--accent-dim) 0%, var(--surface2) 100%);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .card.current .card-title {
+    color: var(--accent);
+  }
+
+  .card.done {
+    border-color: var(--green-dim);
+    opacity: 0.85;
+  }
+
+  .card.done .card-title {
+    color: var(--green);
+  }
+
+  .card .card-title {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .card .card-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }
+
+  .card .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  .card-status {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .card-status.done {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+
+  .card-status.current {
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+
+  .card-status.pending {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+  }
+
+  .card-tag {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* Detail Panel (for current step) */
+  .detail-panel {
+    background: var(--surface);
+    border: 1px solid var(--accent-dim);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 16px;
+  }
+
+  .detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .detail-header .icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+  }
+
+  .detail-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .detail-body {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .detail-body code {
+    background: var(--surface2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-family: "JetBrains Mono", "SF Mono", monospace;
+  }
+
+  .detail-metrics {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .metric {
+    text-align: center;
+  }
+
+  .metric .val {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .metric .lbl {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 1px;
+  }
+
+  /* Side Result Stream */
+  .stream-section {
+    margin-top: 16px;
+  }
+
+  .stream-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stream-entry {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stream-entry .ts {
+    color: var(--text-dim);
+    flex-shrink: 0;
+    font-family: "SF Mono", monospace;
+    font-size: 10px;
+  }
+
+  .stream-entry .msg {
+    flex: 1;
+  }
+
+  .stream-entry .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .stream-entry .status-dot.ok { background: var(--green); }
+  .stream-entry .status-dot.wait { background: var(--yellow); }
+  .stream-entry .status-dot.err { background: var(--red); }
+
+  /* Scrollbar */
+  .board::-webkit-scrollbar { height: 4px; }
+  .board::-webkit-scrollbar-track { background: transparent; }
+  .board::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 640px) {
+    .column { min-width: 170px; }
+    .stat-card { min-width: 80px; }
+    .stat-card .value { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="project-badge">LF</div>
+    <div class="project-info">
+      <h1>LogicFolding Q1</h1>
+      <div class="subtitle">Phase 1 · VerticalStackingEngine 核心引擎</div>
+    </div>
+  </div>
+  <div class="phase-tag">
+    <span class="dot"></span>
+    <span id="currentStepLabel">S₂ 理性层 · 执行中</span>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-card">
+    <div class="label">总步骤</div>
+    <div class="value pending" id="totalSteps">8</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">已完成</div>
+    <div class="value done" id="doneSteps">1</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">进行中</div>
+    <div class="value active" id="activeSteps">1</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">效率目标</div>
+    <div class="value" style="color:var(--cyan)" id="efficiencyTarget">1.5x</div>
+  </div>
+</div>
+
+<!-- Progress -->
+<div class="progress-section">
+  <div class="progress-header">
+    <span>完成进度</span>
+    <span id="progressText">1/8 (12%)</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill" style="width:12%"></div>
+  </div>
+</div>
+
+<!-- Kanban Board -->
+<div class="board" id="board"></div>
+
+<!-- Current Step Detail -->
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-header">
+    <div class="icon">⚡</div>
+    <h3 id="detailTitle">S₂ 理性层 — 逻辑验证与事实核查</h3>
+  </div>
+  <div class="detail-body" id="detailBody">
+    对 S₁ 的直觉判断进行严格逻辑验证、事实核对和推导。
+    输出逻辑链骨架，标记不确定的断言。
+    验证 S₁ 的假设，修正偏差。
+  </div>
+  <div class="detail-metrics">
+    <div class="metric">
+      <div class="val" id="metricVal1">85%</div>
+      <div class="lbl">推理置信</div>
+    </div>
+    <div class="metric">
+      <div class="val" id="metricVal2">2.8s</div>
+      <div class="lbl">推理延迟</div>
+    </div>
+    <div class="metric">
+      <div class="val" id="metricVal3">345</div>
+      <div class="lbl">Token 消耗</div>
+    </div>
+  </div>
+</div>
+
+<!-- Stream Section -->
+<div class="stream-section">
+  <div class="stream-header">
+    <span>⬤</span> 实时执行流
+  </div>
+  <div id="streamContainer">
+    <div class="stream-entry">
+      <span class="status-dot ok"></span>
+      <span class="ts">00:00:01</span>
+      <span class="msg">S₁ 直觉层完成 — 核心判断: "大概率是配置问题"</span>
+    </div>
+    <div class="stream-entry" style="border-color:var(--accent-dim)">
+      <span class="status-dot wait"></span>
+      <span class="ts">00:00:02</span>
+      <span class="msg">S₂ 理性层进行中 — 验证点: plugin enabled 字段...</span>
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== DATA ======
+
+const STEPS = [
+  { id: 's1', phase: 'done',   col: 'done',      title: 'S₁ 直觉层',        desc: 'System 1 — 快思考，基于经验模式给出核心判断 (≤50字)',           tag: '直觉',   done: true,  metric: { c: '98%', t: '1.2s', k: '127' }, label: 'Intuition' },
+  { id: 's2', phase: 'current', col: 'in-progress', title: 'S₂ 理性层',        desc: 'System 2 — 慢思考，逻辑推导、事实核查、证据收集',                tag: '理性',   done: false, metric: { c: '85%', t: '2.8s', k: '345' }, label: 'Rationality' },
+  { id: 's3', phase: 'pending', col: 'in-progress', title: 'S₃ 反思层',        desc: 'System 3 — 元认知，偏差检测、边界检查、全局审视',                   tag: '元认知', done: false, metric: { c: '', t: '', k: '' }, label: 'Reflection' },
+  { id: 'syn', phase: 'pending', col: 'in-progress', title: 'Folded Synthesis', desc: '三层融合输出，不重复推导，τ′ = τ/k² 压缩率',                       tag: '融合',   done: false, metric: { c: '', t: '', k: '' }, label: 'Synthesis' },
+  { id: 'eng', phase: 'pending', col: 'todo',       title: 'VerticalStackingEngine', desc: '引擎协调器：S₁→S₂→S₃→Fusion 串联，回溯处理，效率计算', tag: '引擎',   done: false, metric: { c: '', t: '', k: '' }, label: 'Engine' },
+  { id: 'trace', phase: 'pending', col: 'todo',     title: 'TracingLayer',      desc: '每层独立落文件：context/s1/s2/s3/synthesis/trace.json',             tag: '追踪',   done: false, metric: { c: '', t: '', k: '' }, label: 'Tracing' },
+  { id: 'ana', phase: 'pending', col: 'todo',       title: 'TraceAnalyzer',     desc: '跨会话批量分析工具：S₁准确率、S₃回溯率、偏差热点',                  tag: '分析',   done: false, metric: { c: '', t: '', k: '' }, label: 'Analyzer' },
+  { id: 'eff', phase: 'pending', col: 'todo',       title: '效率计算',            desc: '折叠效率 τ′/τ，A/B 对比测试 (目标 ≥1.5x)',                          tag: '指标',   done: false, metric: { c: '', t: '', k: '' }, label: 'Efficiency' },
+];
+
+const COLUMNS = [
+  { id: 'done',        title: '✅ 已完成',   icon: '✅' },
+  { id: 'in-progress', title: '⚡ 进行中',   icon: '⚡' },
+  { id: 'todo',        title: '⏳ 待办',     icon: '⏳' },
+];
+
+const DETAILS = {
+  s1:   { title: 'S₁ 直觉层 — 快思考直觉判断', body: 'System 1 基于已有知识和经验模式，对问题做出最直接的第一反应。<br><br>• 快速、本能、不展开论证<br>• 输出 ≤50 字的核心判断<br>• 作为 S₂ 的"待验证假设"<br>• 擅长的任务类型：模式识别、类比联想、常识判断', metrics: ['98%', '1.2s', '127'] },
+  s2:   { title: 'S₂ 理性层 — 逻辑验证与事实核查', body: 'System 2 对 S₁ 的直觉进行严格逻辑验证、事实核对和推导。<br><br>• 输出逻辑链骨架 (前提→步骤→结论)<br>• 关键事实核对: [✓] 有证据 / [?] 不确定<br>• 对 S₁ 的反馈: 正确/部分正确/错误', metrics: ['85%', '2.8s', '345'] },
+  s3:   { title: 'S₃ 反思层 — 元认知偏差检测', body: 'System 3 站在全局视角审视 S₁ + S₂，检测偏差、陷阱和盲区。<br><br>• 关键自我质问 (至少1个)<br>• 偏差检测：确认偏差、锚定效应等<br>• 边界检查：推理适用范围<br>• 反常识信号检测', metrics: ['—', '—', '—'] },
+  syn:  { title: 'Folded Synthesis — 三层融合输出', body: '将 S₁/S₂/S₃ 的信号纵向融合，产生最终高密度答案。<br><br>• 不重复前三层的推导过程<br>• S₃ 通过 → 直接输出浓缩答案<br>• S₃ 有修正 → 修正后输出<br>• 输出 token ≤ 三层总和的 1/k', metrics: ['—', '—', '—'] },
+  eng:  { title: 'VerticalStackingEngine — 引擎协调器', body: '将四阶段串联为一次完整推理的核心引擎。<br><br>• S₁→S₂→S₃→Fusion 完整流水线<br>• S₃ 发现严重问题自动回溯 (max 2次)<br>• 折叠效率 τ′/τ 自动计算', metrics: ['—', '—', '—'] },
+  trace: { title: 'TracingLayer — 思考追踪层', body: '每层独立落文件 - 这不是可选功能，而是基础设施。<br><br>• context.md + s1/s2/s3/synthesis + trace.json<br>• 结构化追踪数据 + 折叠效率分析<br>• 回溯记录 (backtracks/)', metrics: ['—', '—', '—'] },
+  ana:  { title: 'TraceAnalyzer — 批量分析工具', body: '跨会话追踪数据分析工具。<br><br>• S₁ 直觉准确率统计<br>• S₃ 回溯频率和原因分布<br>• 偏差热点识别<br>• 折叠效率趋势分析<br>• 智慧深度分析 (beyond_obvious 率)', metrics: ['—', '—', '—'] },
+  eff:  { title: '效率计算 — 折叠效率 τ′/τ', body: '核心效率指标计算与 A/B 对比。<br><br>• τ′/τ = (三层总 token / Fusion token) / k<br>• 目标 ≥ 1.5x<br>• A/B 测试：折叠模式 vs 传统 CoT', metrics: ['—', '—', '—'] },
+};
+
+// ====== RENDER ======
+
+function renderBoard() {
+  const board = document.getElementById('board');
+
+  COLUMNS.forEach(col => {
+    const cards = STEPS.filter(s => s.col === col.id);
+    const colEl = document.createElement('div');
+    colEl.className = 'column';
+
+    colEl.innerHTML = `
+      <div class="column-header">
+        <span class="column-title">${col.icon} ${col.title}</span>
+        <span class="column-count">${cards.length}</span>
+      </div>
+      ${cards.map(s => renderCard(s)).join('')}
+    `;
+    board.appendChild(colEl);
+  });
+
+  updateStats();
+}
+
+function renderCard(step) {
+  const cls = step.phase === 'current' ? 'card current' : step.phase === 'done' ? 'card done' : 'card';
+  const statusClass = step.phase === 'done' ? 'done' : step.phase === 'current' ? 'current' : 'pending';
+  const statusText = step.phase === 'done' ? '✓ 完成' : step.phase === 'current' ? '⚡ 执行中' : '— 等待';
+
+  return `
+    <div class="${cls}">
+      <div class="card-title">${step.title}</div>
+      <div class="card-desc">${step.desc}</div>
+      <div class="card-footer">
+        <span class="card-status ${statusClass}">${statusText}</span>
+        <span class="card-tag">#${step.tag}</span>
+      </div>
+    </div>
+  `;
+}
+
+function updateStats() {
+  const total = STEPS.length;
+  const done = STEPS.filter(s => s.phase === 'done').length;
+  const active = STEPS.filter(s => s.phase === 'current').length;
+  const pct = Math.round((done / total) * 100);
+
+  document.getElementById('totalSteps').textContent = total;
+  document.getElementById('doneSteps').textContent = done;
+  document.getElementById('activeSteps').textContent = active;
+  document.getElementById('progressText').textContent = `${done}/${total} (${pct}%)`;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function updateDetail() {
+  const current = STEPS.find(s => s.phase === 'current');
+  if (!current) return;
+
+  const d = DETAILS[current.id];
+  document.getElementById('currentStepLabel').textContent = `${current.title} · 执行中`;
+  document.getElementById('detailTitle').textContent = d.title;
+  document.getElementById('detailBody').innerHTML = d.body;
+
+  if (d.metrics) {
+    document.getElementById('metricVal1').textContent = d.metrics[0];
+    document.getElementById('metricVal2').textContent = d.metrics[1];
+    document.getElementById('metricVal3').textContent = d.metrics[2];
+  }
+}
+
+// ====== INIT ======
+renderBoard();
+updateDetail();
+
+// ====== MCK SIMULATION (for demo: advance step every 5s) ======
+// Remove this in production — state should come from real data source
+let simIdx = 1; // s1 is done, s2 is current
+
+function advanceStep() {
+  const next = STEPS[simIdx];
+  const prev = STEPS[simIdx - 1];
+  if (!next) return;
+  if (prev) prev.phase = 'done';
+  next.phase = 'current';
+
+  // Push stream entry
+  const stream = document.getElementById('streamContainer');
+  const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+
+  if (prev) {
+    const entry = document.createElement('div');
+    entry.className = 'stream-entry';
+    entry.innerHTML = `<span class="status-dot ok"></span><span class="ts">${ts}</span><span class="msg">${prev.title} — 完成 ✓</span>`;
+    stream.appendChild(entry);
+  }
+
+  const entry2 = document.createElement('div');
+  entry2.className = 'stream-entry';
+  entry2.style.borderColor = 'var(--accent-dim)';
+  entry2.innerHTML = `<span class="status-dot wait"></span><span class="ts">${ts}</span><span class="msg">${next.title} — 执行中...</span>`;
+  stream.appendChild(entry2);
+
+  // Scroll stream to bottom
+  stream.scrollTop = stream.scrollHeight;
+
+  // Re-render board and detail
+  const board = document.getElementById('board');
+  board.innerHTML = '';
+  COLUMNS.forEach(col => {
+    const cards = STEPS.filter(s => s.col === col.id);
+    const colEl = document.createElement('div');
+    colEl.className = 'column';
+    colEl.innerHTML = `
+      <div class="column-header">
+        <span class="column-title">${col.icon} ${col.title}</span>
+        <span class="column-count">${cards.length}</span>
+      </div>
+      ${cards.map(s => renderCard(s)).join('')}
+    `;
+    board.appendChild(colEl);
+  });
+
+  updateStats();
+  updateDetail();
+  simIdx++;
+}
+
+// Start simulation
+setInterval(advanceStep, 5000);
+</script>
+</body>
+</html>
